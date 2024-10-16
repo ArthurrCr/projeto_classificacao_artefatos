@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 modelos/*.h5
 dados/
+venv/
