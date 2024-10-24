@@ -1,58 +1,91 @@
-import os
 import tensorflow as tf
-import numpy as np
-import tensorflow_addons as tfa
+import keras_cv
 
 # Função para carregar e pré-processar a imagem
 def load_and_preprocess_image(path):
-    # Ler a imagem
+    '''
+    Carrega uma imagem a partir de um caminho, decodifica, redimensiona e normaliza.
+
+    Parâmetros:
+    - path (str): Caminho para a imagem.
+
+    Retorna:
+    - image (tensor): Imagem pré-processada com dimensões (256, 256, 3) e valores normalizados entre 0 e 1.
+    '''
+    # Ler a imagem do arquivo
     image = tf.io.read_file(path)
+    # Decodificar a imagem JPEG
     image = tf.image.decode_jpeg(image, channels=3)
-    # Redimensionar a imagem
+    # Redimensionar a imagem para 256x256 pixels
     image = tf.image.resize(image, [256, 256])
-    # Normalizar os pixels para [0, 1]
+    # Normalizar os pixels para o intervalo [0, 1]
     image = image / 255.0
     return image
 
-def random_rotation(image, max_angle):
-    # Converter o ângulo para radianos
-    angle = tf.random.uniform([], -max_angle, max_angle, dtype=tf.float32) * np.pi / 180
-    image = tfa.image.rotate(image, angles=angle, fill_mode='nearest')
-    return image
+def fixed_rotation(image, angle):
+    '''
+    Aplica uma rotação fixa à imagem no ângulo especificado usando KerasCV.
+
+    Parâmetros:
+    - image (tensor): Imagem de entrada.
+    - angle (float): Ângulo para a rotação em graus (positivo para anti-horário, negativo para horário).
+
+    Retorna:
+    - image (tensor): Imagem rotacionada.
+    '''
+    # Converte o ângulo de graus para fração de rotação (KerasCV espera um fator de rotação entre -1 e 1)
+    rotation_factor = angle / 360.0
+    rotation_layer = keras_cv.layers.RandomRotation(factor=(rotation_factor, rotation_factor))
+    
+    # Aplicar a rotação
+    rotated_image = rotation_layer(image[None, ...])[0]
+    
+    return rotated_image
 
 def adjust_brightness(image, delta):
+    '''
+    Ajusta o brilho da imagem adicionando um deslocamento aos valores dos pixels.
+
+    Parâmetros:
+    - image (tensor): Imagem de entrada.
+    - delta (float): Valor a ser adicionado ao brilho (pode ser positivo ou negativo).
+
+    Retorna:
+    - image (tensor): Imagem com brilho ajustado.
+    '''
+    # Ajustar o brilho da imagem
     image = tf.image.adjust_brightness(image, delta=delta)
+    # Garantir que os valores dos pixels permaneçam no intervalo [0, 1]
     image = tf.clip_by_value(image, 0.0, 1.0)
     return image
 
-def flip_horizontal(image):
-    image = tf.image.flip_left_right(image)
+def adjust_contrast(image, contrast_factor):
+    '''
+    Ajusta o contraste da imagem por um fator especificado.
+
+    Parâmetros:
+    - image (tensor): Imagem de entrada.
+    - contrast_factor (float): Fator para ajustar o contraste. Valores > 1 aumentam o contraste, valores < 1 diminuem.
+
+    Retorna:
+    - image (tensor): Imagem com contraste ajustado.
+    '''
+    image = tf.image.adjust_contrast(image, contrast_factor)
+    # Clipping para garantir que os valores estejam entre 0 e 1
+    image = tf.clip_by_value(image, 0.0, 1.0)
     return image
 
-def random_zoom(image, zoom_range=(0.8, 1.2)):
-    # Random zoom factor
-    zoom = tf.random.uniform([], zoom_range[0], zoom_range[1])
-    # Get image dimensions
-    height, width = tf.shape(image)[0], tf.shape(image)[1]
-    # Compute new dimensions
-    new_height = tf.cast(zoom * tf.cast(height, tf.float32), tf.int32)
-    new_width = tf.cast(zoom * tf.cast(width, tf.float32), tf.int32)
-    # Resize image
-    image = tf.image.resize(image, [new_height, new_width])
-    # Crop or pad to original size
-    image = tf.image.resize_with_crop_or_pad(image, height, width)
+
+def adjust_saturation(image, saturation_factor):
+    '''
+    Ajusta a saturação da imagem por um fator especificado.
+
+    Parâmetros:
+    - image (tensor): Imagem de entrada.
+    - saturation_factor (float): Fator para ajustar a saturação. Valores > 1 aumentam a saturação, valores < 1 diminuem.
+
+    Retorna:
+    - image (tensor): Imagem com saturação ajustada.
+    '''
+    image = tf.image.adjust_saturation(image, saturation_factor)
     return image
-
-def random_shear(image, shear_level):
-    # shear_level é o ângulo de cisalhamento em radianos
-    shear = tf.random.uniform([], -shear_level, shear_level)
-
-    # Criar a matriz de transformação
-    shear_matrix = [1.0, -tf.math.sin(shear), 0.0,
-                    0.0, 1.0, 0.0,
-                    0.0, 0.0]
-
-    # Aplicar a transformação
-    image = tfa.image.transform(image, shear_matrix, interpolation='BILINEAR', fill_mode='nearest')
-    return image
-
